@@ -21,8 +21,8 @@ struct MigrationTablePrint {
     /* since this can only be fetched from the db instance this cannot be null */
     id: i64,
     filename: String,
-    hash: String,
     timestamp: DateTime<Utc>,
+    hash: String,
 }
 
 impl From<&MigrationEntry> for MigrationTablePrint {
@@ -36,7 +36,7 @@ impl From<&MigrationEntry> for MigrationTablePrint {
     }
 }
 pub fn get_migration_status(db: &Database) {
-    let table_config = Settings::default().with(Style::psql());
+    let table_config = Settings::default().with(Style::sharp());
     let migs: Vec<MigrationTablePrint> = db
         .get_migrations()
         .iter()
