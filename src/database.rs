@@ -58,21 +58,32 @@ pub struct Database {
 impl Database {
     /// THIS DOES NOT WORK FOR SUPABASE, USE THE CLI TO RESET YOUR DB
     pub fn reset(mut self, db_url: &str) -> Result<(), postgres::Error> {
-        let db_name = db_url.rsplitn(2, '/').collect::<Vec<&str>>()[0];
-        println!("{}", db_name);
+        let db_name = db_url.rsplitn(2, '/').next().unwrap();
+        println!("Resetting database: {}", db_name);
+
+        drop(self.conn);
+
+        let base_url = db_url.rsplitn(2, '/').nth(1).unwrap();
+        let sys_db_url = format!("{}/postgres", base_url);
+
+        // Connect to the system database
+        let mut sys_conn = postgres::Client::connect(&sys_db_url, postgres::NoTls)?;
+
+        // Terminate other connections to the target DB
         let disconnect_query = format!(
-            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{}' AND pid <> pg_backend_pid();",
+            "SELECT pg_terminate_backend(pid) \
+         FROM pg_stat_activity \
+         WHERE datname = '{}' AND pid <> pg_backend_pid();",
             db_name
         );
-        self.conn.execute(disconnect_query.as_str(), &[])?;
+        sys_conn.execute(&disconnect_query, &[])?;
 
-        // Drop the target database
-        let drop_query = format!("DROP DATABASE IF EXISTS {}", db_name);
-        self.conn.execute(drop_query.as_str(), &[])?;
+        // Drop and recreate the target database
+        let drop_query = format!("DROP DATABASE IF EXISTS \"{}\";", db_name);
+        sys_conn.execute(&drop_query, &[])?;
 
-        // Recreate the database
-        let create_query = format!("CREATE DATABASE {}", db_name);
-        self.conn.execute(create_query.as_str(), &[])?;
+        let create_query = format!("CREATE DATABASE \"{}\";", db_name);
+        sys_conn.execute(&create_query, &[])?;
 
         println!("✓ Database `{}` has been reset.", db_name);
         Ok(())
@@ -126,18 +137,51 @@ impl Database {
         Ok(entry)
     }
     pub fn init(db_url: &str) -> Result<Database, postgres::Error> {
-        let client = Client::connect(&db_url, NoTls);
-        if let Err(ref e) = client {
-            eprintln!("Error connecting to databse: {}", e);
-        }
-        let mut client = client.expect("How did we get here?");
+        // Try connecting to the target DB
+        match Client::connect(db_url, NoTls) {
+            Ok(mut client) => {
+                Self::create_schema(&mut client)?;
+                let migrations = Self::fetch_existing_migrations(&mut client)?;
+                Ok(Database {
+                    conn: client,
+                    migrations,
+                })
+            }
+            Err(e) => {
+                eprintln!("Error connecting to database: {}", e);
 
-        Self::create_schema(&mut client)?;
-        let migrations = Self::fetch_existing_migrations(&mut client)?;
-        Ok(Database {
-            conn: client,
-            migrations,
-        })
+                // Check if the error is due to missing database
+                if e.to_string().contains("does not exist") {
+                    // Extract db name
+                    let db_name = db_url.rsplitn(2, '/').next().unwrap();
+                    let system_db_url = format!("{}/postgres", db_url.rsplitn(2, '/').nth(1).unwrap());
+
+                    eprintln!("Attempting to create missing database `{}`...", db_name);
+
+                    // Connect to the system database
+                    let mut sys_client = Client::connect(&system_db_url, NoTls)?;
+
+                    // Create the target database
+                    sys_client.execute(
+                        &format!("CREATE DATABASE \"{}\";", db_name),
+                        &[],
+                    )?;
+
+                    drop(sys_client); // Just to be explicit
+
+                    // Try connecting again
+                    let mut client = Client::connect(db_url, NoTls)?;
+                    Self::create_schema(&mut client)?;
+                    let migrations = Self::fetch_existing_migrations(&mut client)?;
+                    Ok(Database {
+                        conn: client,
+                        migrations,
+                    })
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     pub fn run_new_migration(
