@@ -1,7 +1,7 @@
 use crate::database::{Database, MigrationEntry};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use colored::Colorize;
-use regex::Regex;
+use regex_lite::Regex;
 use std::{
     collections::BTreeMap,
     fs,
@@ -97,12 +97,7 @@ pub fn create_new_migration(migration_dir: &Path, migration_name: &str) {
     println!("Created migration: {}", new_file_path.display());
 }
 
-pub fn run_migration(
-    db: &mut Database,
-    migration_dir: &Path,
-    dry_run: bool,
-    force: bool,
-) {
+pub fn run_migration(db: &mut Database, migration_dir: &Path, dry_run: bool, force: bool) {
     let files: Vec<PathBuf> = WalkDir::new(migration_dir)
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
         .into_iter()
@@ -193,7 +188,6 @@ pub fn run_migration(
             continue;
         }
 
-
         let id = Database::run_new_migration(&mut transaction, &entry, &sql);
         if let Err(e) = id {
             eprintln!(
@@ -224,5 +218,3 @@ pub fn run_migration(
     println!("Migration completed");
     transaction.commit().ok();
 }
-
-

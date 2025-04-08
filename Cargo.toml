@@ -3,6 +3,7 @@ name = "portunus-rs"
 version = "0.1.0"
 edition = "2024"
 authors = ["natimerry"]
+publish = false
 description = "Fast synchronous migration tool for postgres, built to endure."
 [dependencies]
 chrono = "0.4.40"
@@ -12,5 +13,9 @@ postgres = "0.19.10"
 sha2 = "0.10.8"
 tabled = "0.18.0"
 walkdir = "2.5.0"
-regex = "1.11.1"
+regex-lite = "0.1.6"
 colored = "3.0.0"
+
+[build-dependencies]
+clap_complete = "4.5.47"
+

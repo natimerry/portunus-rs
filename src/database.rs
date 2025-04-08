@@ -1,12 +1,7 @@
 use chrono::{DateTime, Utc};
 use postgres::{Client, NoTls, Transaction};
 use sha2::{Digest, Sha256};
-use std::{
-    fmt::Debug,
-    fs,
-    path::Path,
-    time::SystemTime,
-};
+use std::{fmt::Debug, fs, path::Path, time::SystemTime};
 
 #[derive(Debug, Clone)]
 pub struct MigrationEntry {
@@ -63,9 +58,7 @@ pub struct Database {
 impl Database {
     /// THIS DOES NOT WORK FOR SUPABASE, USE THE CLI TO RESET YOUR DB
     pub fn reset(mut self, db_url: &str) -> Result<(), postgres::Error> {
-        let db_name = db_url
-            .rsplitn(2, '/')
-            .collect::<Vec<&str>>()[0];
+        let db_name = db_url.rsplitn(2, '/').collect::<Vec<&str>>()[0];
         println!("{}", db_name);
         let disconnect_query = format!(
             "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{}' AND pid <> pg_backend_pid();",
@@ -87,7 +80,6 @@ impl Database {
     pub fn get_migrations(&self) -> &Vec<MigrationEntry> {
         &self.migrations
     }
-
 
     pub fn start_transaction(&mut self) -> Result<Transaction, postgres::Error> {
         self.conn.transaction()
